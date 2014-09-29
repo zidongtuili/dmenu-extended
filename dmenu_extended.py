@@ -49,6 +49,9 @@ default_prefs = {
     },
     "alias_files": [], # TODO
     "exclude_application_binaries": True,
+    "pluginItems_indicator_nested": "-> ",
+    "pluginItems_indicator_flat": ": ",
+    "pluginItems_display": 'flat',
 
     # "valid_extensions": [
     #     "py",                           # Python script
@@ -108,9 +111,6 @@ default_prefs = {
     "filebrowser": "xdg-open",          # Program to handle opening paths
     "webbrowser": "xdg-open",           # Program to hangle opening urls
     "terminal": "xterm",                # Terminal
-    "indicator_submenu": "->",          # Symbol to indicate a submenu item
-    "indicator_edit": "*",              # Symbol to indicate an item will launch an editor
-    "indicator_alias": "#"              # Symbol to indecate an aliased command
 }
 
 
@@ -512,35 +512,43 @@ class dmenu(object):
 
 
     def cache_load(self, exitOnFail=False):
+        out = ""
+        cachefiles = os.listdir(path_cache)
+        cachefiles.sort()
+        for cachefile in cachefiles:
+            if cachefile[:19] == 'dmenuExtended_group':
+                out += self.cache_open(path_cache + '/' + cachefile)
+        return out
 
-        if self.debug:
-            print("Loading the plugins cache")
 
-        cache_plugins = self.cache_open(file_cachePlugins)
-        if self.debug:
-            print("Done!")
-            print("Loading the scanned cache")
-        cache_scanned = self.cache_open(file_cacheScanned)
-        if self.debug:
-            print("Done!")
+        # if self.debug:
+        #     print("Loading the plugins cache")
 
-        if cache_plugins == False or cache_scanned == False:
-            if exitOnFail:
-                if self.debug:
-                    print('The cache could not be opened, exiting')
-                sys.exit()
-            else:
-                if self.debug:
-                    print('The cache was not loaded, attempting to regenerate...')
-                if self.cache_regenerate() == False:
-                    if self.debug:
-                        print('Cache regeneration failed')
-                    self.menu(['Error caching data'])
-                    sys.exit()
-                else:
-                    return self.cache_load(exitOnFail=True)
+        # cache_plugins = self.cache_open(file_cachePlugins)
+        # if self.debug:
+        #     print("Done!")
+        #     print("Loading the scanned cache")
+        # cache_scanned = self.cache_open(file_cacheScanned)
+        # if self.debug:
+        #     print("Done!")
 
-        return cache_plugins + cache_scanned
+        # if cache_plugins == False or cache_scanned == False:
+        #     if exitOnFail:
+        #         if self.debug:
+        #             print('The cache could not be opened, exiting')
+        #         sys.exit()
+        #     else:
+        #         if self.debug:
+        #             print('The cache was not loaded, attempting to regenerate...')
+        #         if self.cache_regenerate() == False:
+        #             if self.debug:
+        #                 print('Cache regeneration failed')
+        #             self.menu(['Error caching data'])
+        #             sys.exit()
+        #         else:
+        #             return self.cache_load(exitOnFail=True)
+
+        # return cache_plugins + cache_scanned
 
 
     def command_output(self, command, split=True):
@@ -561,13 +569,14 @@ class dmenu(object):
 
     def scan_binaries(self, filter_binaries=False):
         out = []
+        if filter_binaries:
+            print('iersntirsentsirentsiren')
         for path in self.system_path():
             if os.path.exists(path):
                 for binary in os.listdir(path):
                     if filter_binaries:
                         if os.path.exists('/usr/share/applications/' + binary + '.desktop'):
-                            if binary[:3] != 'gpk':
-                                out.append(binary)
+                            out.append(binary)
                     else:
                         out.append(binary)
             else:
@@ -651,6 +660,35 @@ class dmenu(object):
         return applications
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def cache_build(self):
         self.load_preferences()
         cache = {
@@ -661,20 +699,31 @@ class dmenu(object):
             'applications': [],
             'aliases': []
         }
+        if self.prefs['pluginItems_display'] == 'flat':
+            delimiter = self.prefs['pluginItems_indicator_flat']
+            for plugin in self.get_plugins():
+                for item in plugin['plugin'].menu_items():
+                    cache['plugins'].append(plugin['plugin'].title + delimiter + item)
+        else:
+            for plugin in self.get_plugins():
+                cache['plugins'].append(self.prefs['pluginItems_indicator_nested'] + plugin['plugin'].title)
 
-        cache['binaries'] = self.scan_binaries(self.prefs['filter_binaries'])
 
-        applications = self.scan_applications()
-        for application_name in applications:
-            cache['applications'].append(application_name)
+        if self.prefs['group_order']['binaries'] is not None:
+            cache['binaries'] = self.scan_binaries(self.prefs['filter_binaries'])
 
+        if self.prefs['group_order']['applications'] is not None:
+            applications = self.scan_applications()
+            for application_name in applications:
+                cache['applications'].append(application_name)
+
+        # Remove duplicate binary application combos, favouring application
         if self.prefs['exclude_application_binaries']:
             for application_name in applications:
-                print(applications[application_name]['binary'] + ', ' + application_name)
                 if applications[application_name]['binary'] in cache['binaries']:
                     cache['binaries'].remove(applications[application_name]['binary'])
         
-
+        # Scan files and folders
         for folder in self.prefs['include_folders']:
             if folder not in cache['folders']:
                 for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
@@ -721,6 +770,13 @@ class dmenu(object):
             if self.prefs['group_order'][group] > max_level:
                 max_level = self.prefs['group_order'][group] + 1
 
+        # Clear cache groups
+        cachefiles = os.listdir(path_cache)
+        cachefiles.sort()
+        for cachefile in cachefiles:
+            if cachefile[:19] == 'dmenuExtended_group':
+                os.remove(path_cache + '/' + cachefile)
+
         for level in range(max_level):
             tmp = []
             for group in [name for name in self.prefs['group_order'] if self.prefs['group_order'][name] == level]:
@@ -730,179 +786,21 @@ class dmenu(object):
                     tmp.sort(key=len)
                 else:
                     tmp.sort()
+                self.cache_save(tmp, path_cache + '/dmenuExtended_group' + str(level) + '.txt')
                 out += tmp
 
         self.cache_save(out, file_cacheScanned)
         return out
 
-    # def cache_build(self):
-    #     self.load_preferences()
-
-    #     valid_extensions = []
-    #     if 'valid_extensions' in self.prefs:
-    #         for extension in self.prefs['valid_extensions']:
-    #             if extension == '*':
-    #                 valid_extensions = True
-    #                 break
-    #             elif extension == '':
-    #                 valid_extensions.append('')
-    #             elif extension[0] != '.':
-    #                 extension = '.' + extension
-    #             valid_extensions.append(extension.lower())
-
-    #     if self.debug:
-    #         print('Valid extensions:')
-    #         print('First 5 items: ')
-    #         print(valid_extensions[:5])
-    #         print(str(len(valid_extensions)) + ' loaded in total')
-    #         print('')
-    #         print('Scanning user binaries...')
-    #     filter_binaries = True
-    #     try:
-    #         if self.prefs['filter_binaries'] == False:
-    #             filter_binaries = False
-    #     except:
-    #         pass
-
-    #     binaries = self.scan_binaries(filter_binaries)
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Valid binaries:')
-    #         print('First 5 items: ')
-    #         print(binaries[:5])
-    #         print(str(len(binaries)) + ' loaded in total')
-    #         print('')
-    #         print('Loading the list of indexed folders...')
-
-    #     watch_folders = []
-    #     if 'watch_folders' in self.prefs:
-    #         watch_folders = self.prefs['watch_folders']
-    #     watch_folders = map(lambda x: x.replace('~', os.path.expanduser('~')), watch_folders)
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Watch folders:')
-    #         print('First 5 items: ')
-    #         print(watch_folders[:5])
-    #         print(str(len(watch_folders)) + ' loaded in total')
-    #         print('')
-    #         print('Loading the list of folders to be excluded from the index...')
-
-    #     ignore_folders = []
-
-    #     if 'ignore_folders' in self.prefs:
-    #         for exclude_folder in self.prefs['ignore_folders']:
-    #             ignore_folders.append(exclude_folder.replace('~', os.path.expanduser('~')))
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Excluded folders:')
-    #         print('First 5 items: ')
-    #         print(ignore_folders[:5])
-    #         print(str(len(ignore_folders)) + ' ignore_folders loaded in total')
-    #         print('')
-
-    #     filenames = []
-    #     foldernames = []
-
-    #     follow_symlinks = False
-    #     try:
-    #         if 'follow_symlinks' in self.prefs:
-    #             follow_symlinks = self.prefs['follow_symlinks']
-    #     except:
-    #         pass
-
-    #     if self.debug:
-    #         if follow_symlinks:
-    #             print('Indexing will not follow linked folders')
-    #         else:
-    #             print('Indexing will follow linked folders')
-
-    #         print('Scanning files and folders, this may take a while...')
-
-    #     for watchdir in watch_folders:
-    #         for root, dirs , files in os.walk(watchdir, followlinks=follow_symlinks):
-    #             dirs[:] = [d for d in dirs if os.path.join(root,d) not in ignore_folders]
-
-    #             if self.prefs['scan_hidden_folders'] or root.find('/.')  == -1:
-    #                 for name in files:
-    #                     if self.prefs['include_hidden_files'] or name.startswith('.') == False:
-    #                         if valid_extensions == True or os.path.splitext(name)[1].lower() in valid_extensions:
-    #                             filenames.append(os.path.join(root,name))
-    #                 for name in dirs:
-    #                     if self.prefs['include_hidden_folders'] or name.startswith('.') == False:
-    #                         foldernames.append(os.path.join(root,name))
-
-    #     foldernames = list(filter(lambda x: x not in ignore_folders, foldernames))
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Folders found:')
-    #         print('First 5 items: ')
-    #         print(foldernames[:5])
-    #         print(str(len(foldernames)) + ' found in total')
-    #         print('')
-    #         print('Files found:')
-    #         print('First 5 items: ')
-    #         print(filenames[:5])
-    #         print(str(len(filenames)) + ' found in total')
-    #         print('')
-    #         print('Loading manually added items from preferences file...')
-
-    #     if 'include_items' in self.prefs:
-    #         include_items = []
-    #         for item in self.prefs['include_items']:
-    #             if type(item) == list:
-    #                 if len(item) > 1:
-    #                     include_items.append(self.prefs['indicator_alias'] + ' ' + item[0])
-    #                 else:
-    #                     if self.debug:
-    #                         print("There are aliased items in the configuration with no command.")
-    #             else:
-    #                 include_items.append(item)
-    #     else:
-    #         include_items = []
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Stored items:')
-    #         print('First 5 items: ')
-    #         print(include_items[:5])
-    #         print(str(len(include_items)) + ' items loaded in total')
-    #         print('')
-    #         print('Ordering and combining results...')
-
-    #     plugins = self.plugins_available()
-    #     other = self.sort_shortest(include_items + binaries + foldernames + filenames)
-
-    #     if 'exclude_items' in self.prefs:
-    #         for item in self.prefs['exclude_items']:
-    #             try:
-    #                 other.remove(item)
-    #             except ValueError:
-    #                 pass
-
-    #     self.cache_save(other, file_cacheScanned)
-
-    #     out = plugins
-    #     out += other
-
-    #     if self.debug:
-    #         print('Done!')
-    #         print('Cache building has finished.')
-    #         print('')
-
-    #     return out
 
 
 class extension(dmenu):
 
-    title = 'Menu configuration'
-    is_submenu = True
+    title = 'Options'
+    verb = 'Action'
 
-    def __init__(self):
-        self.load_preferences()
+    # def __init__(self):
+        # self.load_preferences()
 
     plugins_index_url = 'https://gist.github.com/markjones112358/7699540/raw/dmenu-extended-plugins.txt'
 
@@ -1089,27 +987,256 @@ class extension(dmenu):
             self.menu(['The following plugins were updated:'] + updated)
 
 
-    def run(self, inputText):
-        items = ['Rebuild cache',
-                 self.prefs['indicator_submenu'] + ' Download new plugins',
-                 self.prefs['indicator_submenu'] + ' Remove existing plugins',
-                 self.prefs['indicator_edit'] + ' Edit menu preferences',
-                 'Update installed plugins']
+    def edit_preferences(self):
+        self.open_file(file_prefs)
 
-        selectedIndex = self.select(items, "Action:", numeric=True)
 
-        if selectedIndex != -1:
-            if selectedIndex == 0:
-                self.rebuild_cache()
-            elif selectedIndex == 1:
-                self.download_plugins()
-            elif selectedIndex == 2:
-                self.remove_plugin()
-            elif selectedIndex == 3:
-                self.open_file(file_prefs)
-                self.plugins_available() # Refresh the plugin cache
-            elif selectedIndex == 4:
-                self.update_plugins()
+    # def run(self, inputText):
+    #     items = ['Rebuild cache',
+    #              self.prefs['indicator_submenu'] + ' Download new plugins',
+    #              self.prefs['indicator_submenu'] + ' Remove existing plugins',
+    #              self.prefs['indicator_edit'] + ' Edit menu preferences',
+    #              'Update installed plugins']
+
+    #     selectedIndex = self.select(items, "Action:", numeric=True)
+
+    #     if selectedIndex != -1:
+    #         if selectedIndex == 0:
+    #             self.rebuild_cache()
+    #         elif selectedIndex == 1:
+    #             self.download_plugins()
+    #         elif selectedIndex == 2:
+    #             self.remove_plugin()
+    #         elif selectedIndex == 3:
+    #             self.open_file(file_prefs)
+    #             self.plugins_available() # Refresh the plugin cache
+    #         elif selectedIndex == 4:
+    #             self.update_plugins()
+
+    def menu_items(self):
+        return {
+            'Rebuild Cache': self.rebuild_cache,
+            'Install Plugin': self.download_plugins,
+            'Remove Plugin': self.remove_plugin,
+            'Edit Preferences': self.edit_preferences,
+            'Update Plugins': self.update_plugins
+        }
+
+
+# class extension(dmenu):
+
+#     title = 'Menu configuration'
+#     is_submenu = True
+
+#     def __init__(self):
+#         self.load_preferences()
+
+#     plugins_index_url = 'https://gist.github.com/markjones112358/7699540/raw/dmenu-extended-plugins.txt'
+
+#     def rebuild_cache(self):
+#         if self.debug:
+#             print('Counting items in original cache')
+
+#         cacheSize = len(self.cache_load().split("\n"))
+
+#         if self.debug:
+#             print('Rebuilding the cache...')
+#         result = self.cache_regenerate()
+#         if self.debug:
+#             print('Cache built')
+#             print('Counting items in new cache')
+#         newSize = len(self.cache_load().split("\n"))
+#         if self.debug:
+#             print('New cache size = ' + str(newSize))
+#         cacheSizeChange = newSize - cacheSize
+#         if self.debug:
+#             if cacheSizeChange != 0:
+#                 print('This differs from original by ' + str(cacheSizeChange) + ' items')
+#             else:
+#                 print('Cache size did not change')
+
+#         response = []
+
+#         if cacheSizeChange != 0:
+#             if cacheSizeChange == 1:
+#                 status = 'one new item was added.'
+#             elif cacheSizeChange == -1:
+#                 status = 'one item was removed.'
+#             elif cacheSizeChange > 0:
+#                 status = str(cacheSizeChange) + ' items were added.'
+#             elif cacheSizeChange < 0:
+#                 status = str(abs(cacheSizeChange)) + ' items were removed.'
+#             else:
+#                 status = 'No new items were added'
+
+#             response.append('Cache updated successfully; ' + status)
+
+#             if result == 2:
+#                 response.append('NOTICE: Performance issues were encountered while caching data')
+
+#         else:
+#             response.append('Cache rebuilt; its size did not change.')
+
+#         response.append('The cache contains ' + str(cacheSize) + ' items.')
+
+#         self.menu(response)
+
+
+#     def rebuild_cache_plugin(self):
+#         self.plugins_loaded = self.get_plugins(True)
+#         self.cache_regenerate()
+
+
+#     def download_plugins(self):
+#         self.message_open('Downloading a list of plugins...')
+
+#         try:
+#             plugins = self.download_json(self.plugins_index_url)
+#         except:
+#             self.message_close()
+#             self.menu(["Error: Could not connect to plugin repository.",
+#                        "Please check your internet connection and try again."])
+#             sys.exit()
+
+#         items = []
+
+#         substitute = ('dmenuExtended_', '')
+
+#         installed_plugins = self.get_plugins()
+#         installed_pluginFilenames = []
+
+#         for tmp in installed_plugins:
+#             installed_pluginFilenames.append(tmp['filename'])
+
+#         for plugin in plugins:
+#             if plugin + '.py' not in installed_pluginFilenames:
+#                 items.append(plugin.replace(substitute[0], substitute[1]) + ' - ' + plugins[plugin]['desc'])
+
+#         self.message_close()
+
+#         if len(items) == 0:
+#             self.menu(['There are no new plugins to install'])
+#         else:
+#             item = substitute[0] + self.select(items, 'Install:')
+
+#             if item != -1:
+#                 self.message_open("Downloading selected plugin...")
+#                 plugin_name = item.split(' - ')[0]
+#                 plugin = plugins[plugin_name]
+#                 plugin_source = self.download_text(plugin['url'])
+
+#                 with open(path_plugins + '/' + plugin_name + '.py', 'w') as f:
+#                     for line in plugin_source:
+#                         f.write(line)
+
+#                 self.get_plugins(True)
+#                 self.message_close()
+#                 self.message_open("Rebuilding plugin cache")
+#                 self.plugins_available()
+#                 self.message_close()
+
+#                 self.menu(['Plugin downloaded and installed successfully'])
+
+#                 if self.debug:
+#                     print("Plugins available:")
+#                     for plugin in self.plugins_available():
+#                         print(plugin)
+
+
+#     def installed_plugins(self):
+#         plugins = []
+#         for plugin in self.get_plugins():
+#             plugins.append(plugin["plugin"].title.replace(':','') + ' (' + plugin["filename"] + ')')
+#         return plugins
+
+
+#     def remove_plugin(self):
+#         plugins = self.installed_plugins()
+#         pluginText = self.select(plugins, prompt='Plugin to remove:')
+#         if pluginText != -1:
+#             plugin = pluginText.split('(')[1].replace(')', '')
+#             path = path_plugins + '/' + plugin
+#             if os.path.exists(path):
+#                 os.remove(path)
+#                 self.menu(['Plugin "' + plugin + '" was removed.'])
+#                 if self.debug:
+#                     print("Plugins available:")
+#                     for plugin in self.plugins_available():
+#                         print(plugin)
+#             else:
+#                 if self.debug:
+#                     print('Error - Plugin not found')
+#         else:
+#             if self.debug:
+#                 print('Selection was not understood')
+
+
+#     def update_plugins(self):
+#         self.message_open('Checking for plugin updates...')
+#         plugins_here = list(map(lambda x: x['filename'].split('.')[0], self.get_plugins()))
+#         plugins_here.remove('dmenuExtended_settings')
+#         plugins_there = self.download_json(self.plugins_index_url)
+#         updated = []
+#         for here in plugins_here:
+#             for there in plugins_there:
+#                 if there == here:
+#                     there_sha = plugins_there[there]['sha1sum']
+#                     here_sha = self.command_output("sha1sum " + path_plugins + '/' + here + '.py')[0].split()[0]
+#                     if self.debug:
+#                         print('Checking ' + here)
+#                         print('Local copy has sha of ' + here_sha)
+#                         print('Remote copy has sha of ' + there_sha)
+#                     if there_sha != here_sha:
+#                         sys.stdout.write("Hashes do not match, updating...\n")
+#                         if os.path.exists('/tmp/' + there + '.py'):
+#                             os.remove('/tmp/' + there + '.py')
+#                         os.system('wget ' + plugins_there[there]['url'] + ' -P /tmp')
+#                         download_sha = self.command_output("sha1sum /tmp/" + here + '.py')[0].split()[0]
+#                         if download_sha != there_sha:
+#                             if self.debug:
+#                                 print('Downloaded version of ' + there + ' does not verify against package manager sha1sum key')
+#                                 print('SHA1SUM of downloaded version = ' + download_sha)
+#                                 print('SHA1SUM specified by package manager = ' + there_sha)
+#                                 print('Plugin not updated')
+#                         else:
+#                             os.remove(path_plugins + '/' + here + '.py')
+#                             os.system('mv /tmp/' + here + '.py ' + path_plugins + '/' + here + '.py')
+#                             if self.debug:
+#                                 print('Done!')
+#                             updated += [here]
+#                     else:
+#                         if self.debug:
+#                             print(here + 'is up-to-date')
+#         self.message_close()
+#         if len(updated) == 0:
+#             self.menu(['There are no new updates for installed plugins'])
+#         elif len(updated) == 1:
+#             self.menu([updated[0] + ' was updated to the latest version'])
+#         else:
+#             self.menu(['The following plugins were updated:'] + updated)
+
+
+#     def run(self, inputText):
+#         items = ['Rebuild cache',
+#                  self.prefs['indicator_submenu'] + ' Download new plugins',
+#                  self.prefs['indicator_submenu'] + ' Remove existing plugins',
+#                  self.prefs['indicator_edit'] + ' Edit menu preferences',
+#                  'Update installed plugins']
+
+#         selectedIndex = self.select(items, "Action:", numeric=True)
+
+#         if selectedIndex != -1:
+#             if selectedIndex == 0:
+#                 self.rebuild_cache()
+#             elif selectedIndex == 1:
+#                 self.download_plugins()
+#             elif selectedIndex == 2:
+#                 self.remove_plugin()
+#             elif selectedIndex == 3:
+#                 self.open_file(file_prefs)
+#                 self.plugins_available() # Refresh the plugin cache
+#             elif selectedIndex == 4:
+#                 self.update_plugins()
 
 
 def handle_command(d, out):
@@ -1148,6 +1275,50 @@ def handle_command(d, out):
         d.execute(out)
 
 
+
+def plugins_hook(command, menu):
+    if command[:len(menu.prefs['pluginItems_indicator_nested'])] == menu.prefs['pluginItems_indicator_nested']:
+        cmpts = command.split(menu.prefs['pluginItems_indicator_nested'])
+        plugin_title = cmpts[1]
+
+        plugins = load_plugins(debug)
+        for plugin in plugins:
+            if plugin['plugin'].title == plugin_title:
+                menu_items = plugin['plugin'].menu_items()
+                commands = menu_items.keys()
+                if hasattr(plugin['plugin'], 'verb'):
+                    verb = plugin['plugin'].verb
+                else:
+                    verb = False
+                option = menu.menu(commands, verb)
+                if option in commands:
+                    menu_items[option]()
+    elif command.find(menu.prefs['pluginItems_indicator_flat']) is not -1:
+        cmpts = command.split(menu.prefs['pluginItems_indicator_flat'])
+        if len(cmpts) == 2:
+            plugin_title = cmpts[0]
+            plugin_command = cmpts[1]
+            plugins = load_plugins(debug)
+            for plugin in plugins:
+                if plugin['plugin'].title == plugin_title:
+                    commands = plugin['plugin'].menu_items()
+                    if plugin_command in commands.keys():
+                        commands[plugin_command]()
+        else:
+            return False
+    else:
+        return False
+    return True
+
+
+
+        # if hasattr(plugin['plugin'], 'is_submenu') and plugin['plugin'].is_submenu == True:
+        #     pluginTitle = d.prefs['indicator_submenu'] + ' ' + plugin['plugin'].title.strip()
+        # else:
+        #     pluginTitle = plugin['plugin'].title.strip()
+
+        # if out[:len(pluginTitle)] == pluginTitle:
+        #     plugin_hook = plugin["plugin"]
 def run(debug=False):
     d = dmenu()
     if debug:
@@ -1158,20 +1329,21 @@ def run(debug=False):
 
     if len(out) > 0:
         # Check if the action relates to a plugin
-        plugins = load_plugins(debug)
-        plugin_hook = False
-        for plugin in plugins:
-            if hasattr(plugin['plugin'], 'is_submenu') and plugin['plugin'].is_submenu == True:
-                pluginTitle = d.prefs['indicator_submenu'] + ' ' + plugin['plugin'].title.strip()
-            else:
-                pluginTitle = plugin['plugin'].title.strip()
+        # plugins = load_plugins(debug)
+        # plugin_hook = False
+        # for plugin in plugins:
+        #     if hasattr(plugin['plugin'], 'is_submenu') and plugin['plugin'].is_submenu == True:
+        #         pluginTitle = d.prefs['indicator_submenu'] + ' ' + plugin['plugin'].title.strip()
+        #     else:
+        #         pluginTitle = plugin['plugin'].title.strip()
 
-            if out[:len(pluginTitle)] == pluginTitle:
-                plugin_hook = plugin["plugin"]
+        #     if out[:len(pluginTitle)] == pluginTitle:
+        #         plugin_hook = plugin["plugin"]
 
         # Check for plugin call
-        if plugin_hook != False:
-            plugin_hook.run(out[len(pluginTitle):])
+        if plugins_hook(out, d):
+            pass
+            # plugin_hook.run(out[len(pluginTitle):])
         else:
             # Check for command alias
             alias = d.prefs['indicator_alias']
