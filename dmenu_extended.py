@@ -5,6 +5,7 @@ import os
 import subprocess
 import signal
 import json
+import fnmatch
 
 # Python 3 urllib import with Python 2 fallback
 try:
@@ -23,42 +24,68 @@ file_cachePlugins = path_cache + '/dmenuExtended_plugins.txt'
 file_shCmd = '/tmp/dmenuEextended_shellCommand.sh'
 
 default_prefs = {
-    "valid_extensions": [
-        "py",                           # Python script
-        "svg",                          # Vector graphics
-        "pdf",                          # Portable document format
-        "txt",                          # Plain text
-        "png",                          # Image file
-        "jpg",                          # Image file
-        "gif",                          # Image file
-        "php",                          # PHP source-code
-        "tex",                          # LaTeX document
-        "odf",                          # Open document format
-        "ods",                          # Open document spreadsheet
-        "avi",                          # Video file
-        "mpg",                          # Video file
-        "mp3",                          # Music file
-        "lyx",                          # Lyx document
-        "bib",                          # LaTeX bibliograpy
-        "iso",                          # CD image
-        "ps",                           # Postscript document
-        "zip",                          # Compressed archive
-        "xcf",                          # Gimp image format
-        "doc",                          # Microsoft document format
-        "docx"                          # Microsoft document format
-        "xls",                          # Microsoft spreadsheet format
-        "xlsx",                         # Microsoft spreadsheet format
-        "md",                           # Markup document
-        "sublime-project"               # Project file for sublime
-    ],
-    "watch_folders": ["~/"],            # Base folders through which to search
-    "follow_symlinks": False,           # Follow links to other locations
-    "ignore_folders": [],               # Folders to exclude from the search
-    "scan_hidden_folders": False,       # Enter hidden folders while scanning for items
-    "include_hidden_files": False,      # Include hidden files in the cache
-    "include_hidden_folders": False,    # Include hidden folders in the cache
-    "include_items": [],                # Extra items to display - manually added
-    "exclude_items": [],                # Items to hide - manually hidden
+    "include_files": ['*'],
+    "exclude_files": [],
+    "include_folders": ['~/'],
+    "exclude_folders": [],
+    "include_hidden_files": True,
+    "include_hidden_folders": True,
+    "follow_symlinks": False,
+    "group_order": {
+        "plugins": 0,
+        "applications": 1,
+        "binaries": 2,
+        "files": 4,
+        "folders": 3,
+        "aliases": 5
+    },
+    "group_sort_method": {
+        0: 'length',
+        1: 'length',
+        2: 'length',
+        3: 'length',
+        4: 'alpha',
+        5: 'length'
+    },
+    "alias_files": [], # TODO
+    "exclude_application_binaries": True,
+
+    # "valid_extensions": [
+    #     "py",                           # Python script
+    #     "svg",                          # Vector graphics
+    #     "pdf",                          # Portable document format
+    #     "txt",                          # Plain text
+    #     "png",                          # Image file
+    #     "jpg",                          # Image file
+    #     "gif",                          # Image file
+    #     "php",                          # PHP source-code
+    #     "tex",                          # LaTeX document
+    #     "odf",                          # Open document format
+    #     "ods",                          # Open document spreadsheet
+    #     "avi",                          # Video file
+    #     "mpg",                          # Video file
+    #     "mp3",                          # Music file
+    #     "lyx",                          # Lyx document
+    #     "bib",                          # LaTeX bibliograpy
+    #     "iso",                          # CD image
+    #     "ps",                           # Postscript document
+    #     "zip",                          # Compressed archive
+    #     "xcf",                          # Gimp image format
+    #     "doc",                          # Microsoft document format
+    #     "docx"                          # Microsoft document format
+    #     "xls",                          # Microsoft spreadsheet format
+    #     "xlsx",                         # Microsoft spreadsheet format
+    #     "md",                           # Markup document
+    #     "sublime-project"               # Project file for sublime
+    # ],
+    # "watch_folders": ["~/"],            # Base folders through which to search
+    # "follow_symlinks": False,           # Follow links to other locations
+    # "ignore_folders": [],               # Folders to exclude from the search
+    # "scan_hidden_folders": False,       # Enter hidden folders while scanning for items
+    # "include_hidden_files": False,      # Include hidden files in the cache
+    # "include_hidden_folders": False,    # Include hidden folders in the cache
+    # "include_items": [],                # Extra items to display - manually added
+    # "exclude_items": [],                # Items to hide - manually hidden
     "filter_binaries": True,            # Only include binaries that have a .desktop file
     "menu": 'dmenu',                    # Executable for the menu
     "menu_arguments": [
@@ -266,6 +293,12 @@ class dmenu(object):
                 for key, value in default_prefs.items():
                     if key not in self.prefs:
                         self.prefs[key] = value
+
+                # Convert ~ to absolute path
+                if 'include_folders' in self.prefs:
+                    self.prefs['include_folders'] = list(map(os.path.expanduser, self.prefs['include_folders']))
+                if 'exclude_folders' in self.prefs:
+                    self.prefs['exclude_folders'] = list(map(os.path.expanduser, self.prefs['exclude_folders']))
 
 
     def save_preferences(self):
@@ -571,165 +604,296 @@ class dmenu(object):
         return out
 
 
+    def scan_applications(self):
+        applications = {}
+        for launcher in os.listdir('/usr/share/applications/'):
+            with open('/usr/share/applications/'+launcher, 'r') as f:
+                title = False
+                command = False
+                is_Terminal = False
+                keeper = 0
+                try:
+                    line = f.readline().decode()
+                except UnicodeDecodeError:
+                    line = f.readline().decode('utf-8')
+                while line:
+                    parts = line.strip().split('=')
+                    if len(parts) > 1:
+                        variable, value = parts[0], parts[1]
+                        if variable == 'Name' and title is False:
+                            title = value
+                            keeper += 1
+                        elif variable == 'Exec' and command is False:
+                            command = value
+                            keeper += 2
+                        elif variable == 'Terminal' and is_Terminal is False:
+                            is_Terminal = value
+                            keeper += 4
+                    if keeper == 7:
+                        break
+                    try:
+                        line = f.readline().decode()
+                    except UnicodeDecodeError:
+                        line = f.readline().decode('utf-8')
+
+            if title is not False and command is not False and command is not "":
+                command.replace('%U', '')
+                command.replace('%u', '')
+                command.strip()
+                command = command.split("/")[-1]
+                if type(is_Terminal) == str:
+                    if is_Terminal.lower()[:4] == 'true':
+                        command += ';'
+                elif type(is_Terminal) == bool and is_Terminal:
+                    command += ';'
+                binary = command.split(' ')[0]
+                applications[title] = {'command': command, 'binary': binary}
+        return applications
+
+
     def cache_build(self):
         self.load_preferences()
+        cache = {
+            'binaries': [],
+            'folders': [],
+            'files': [],
+            'plugins': [],
+            'applications': [],
+            'aliases': []
+        }
 
-        valid_extensions = []
-        if 'valid_extensions' in self.prefs:
-            for extension in self.prefs['valid_extensions']:
-                if extension == '*':
-                    valid_extensions = True
-                    break
-                elif extension == '':
-                    valid_extensions.append('')
-                elif extension[0] != '.':
-                    extension = '.' + extension
-                valid_extensions.append(extension.lower())
+        cache['binaries'] = self.scan_binaries(self.prefs['filter_binaries'])
 
-        if self.debug:
-            print('Valid extensions:')
-            print('First 5 items: ')
-            print(valid_extensions[:5])
-            print(str(len(valid_extensions)) + ' loaded in total')
-            print('')
-            print('Scanning user binaries...')
-        filter_binaries = True
-        try:
-            if self.prefs['filter_binaries'] == False:
-                filter_binaries = False
-        except:
-            pass
+        applications = self.scan_applications()
+        for application_name in applications:
+            cache['applications'].append(application_name)
 
-        binaries = self.scan_binaries(filter_binaries)
+        if self.prefs['exclude_application_binaries']:
+            for application_name in applications:
+                print(applications[application_name]['binary'] + ', ' + application_name)
+                if applications[application_name]['binary'] in cache['binaries']:
+                    cache['binaries'].remove(applications[application_name]['binary'])
+        
 
-        if self.debug:
-            print('Done!')
-            print('Valid binaries:')
-            print('First 5 items: ')
-            print(binaries[:5])
-            print(str(len(binaries)) + ' loaded in total')
-            print('')
-            print('Loading the list of indexed folders...')
-
-        watch_folders = []
-        if 'watch_folders' in self.prefs:
-            watch_folders = self.prefs['watch_folders']
-        watch_folders = map(lambda x: x.replace('~', os.path.expanduser('~')), watch_folders)
-
-        if self.debug:
-            print('Done!')
-            print('Watch folders:')
-            print('First 5 items: ')
-            print(watch_folders[:5])
-            print(str(len(watch_folders)) + ' loaded in total')
-            print('')
-            print('Loading the list of folders to be excluded from the index...')
-
-        ignore_folders = []
-
-        if 'ignore_folders' in self.prefs:
-            for exclude_folder in self.prefs['ignore_folders']:
-                ignore_folders.append(exclude_folder.replace('~', os.path.expanduser('~')))
-
-        if self.debug:
-            print('Done!')
-            print('Excluded folders:')
-            print('First 5 items: ')
-            print(ignore_folders[:5])
-            print(str(len(ignore_folders)) + ' ignore_folders loaded in total')
-            print('')
-
-        filenames = []
-        foldernames = []
-
-        follow_symlinks = False
-        try:
-            if 'follow_symlinks' in self.prefs:
-                follow_symlinks = self.prefs['follow_symlinks']
-        except:
-            pass
-
-        if self.debug:
-            if follow_symlinks:
-                print('Indexing will not follow linked folders')
-            else:
-                print('Indexing will follow linked folders')
-
-            print('Scanning files and folders, this may take a while...')
-
-        for watchdir in watch_folders:
-            for root, dirs , files in os.walk(watchdir, followlinks=follow_symlinks):
-                dirs[:] = [d for d in dirs if os.path.join(root,d) not in ignore_folders]
-
-                if self.prefs['scan_hidden_folders'] or root.find('/.')  == -1:
-                    for name in files:
-                        if self.prefs['include_hidden_files'] or name.startswith('.') == False:
-                            if valid_extensions == True or os.path.splitext(name)[1].lower() in valid_extensions:
-                                filenames.append(os.path.join(root,name))
-                    for name in dirs:
-                        if self.prefs['include_hidden_folders'] or name.startswith('.') == False:
-                            foldernames.append(os.path.join(root,name))
-
-        foldernames = list(filter(lambda x: x not in ignore_folders, foldernames))
-
-        if self.debug:
-            print('Done!')
-            print('Folders found:')
-            print('First 5 items: ')
-            print(foldernames[:5])
-            print(str(len(foldernames)) + ' found in total')
-            print('')
-            print('Files found:')
-            print('First 5 items: ')
-            print(filenames[:5])
-            print(str(len(filenames)) + ' found in total')
-            print('')
-            print('Loading manually added items from preferences file...')
-
-        if 'include_items' in self.prefs:
-            include_items = []
-            for item in self.prefs['include_items']:
-                if type(item) == list:
-                    if len(item) > 1:
-                        include_items.append(self.prefs['indicator_alias'] + ' ' + item[0])
+        for folder in self.prefs['include_folders']:
+            if folder not in cache['folders']:
+                for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
+                    dirs_tmp = []
+                    # Take care of hidden folders
+                    if not self.prefs['include_hidden_folders']:
+                        dirs_tmp = list(filter(lambda x: not x.startswith('/.'), dirs[:]))
                     else:
-                        if self.debug:
-                            print("There are aliased items in the configuration with no command.")
+                        dirs_tmp = dirs[:]
+
+                    # Remove any folder exclusions
+                    if self.prefs['exclude_folders'] != []:
+                        dirs_exclude = []
+                        for folder_pattern in self.prefs['exclude_folders']:
+                            dirs_exclude.extend(fnmatch.filter(dirs_tmp, folder_pattern))
+                        dirs_tmp = filter(lambda dirname: dirname not in dirs_exclude, dirs_tmp)
+                    dirs[:] = dirs_tmp
+
+                    cache['folders'].extend(list(map(lambda dirname: os.path.join(root,dirname) + '/', dirs)))
+
+                    # Filter out the hidden files
+                    if not self.prefs['include_hidden_files']:
+                        files = list(filter(lambda x: not x.startswith('.'), files))
+
+                    files_tmp = []
+                    if '*' in self.prefs['include_files']:
+                        files_tmp = files
+                    else:
+                        for file_pattern in self.prefs['include_files']:
+                            files_tmp.extend(fnmatch.filter(files, file_pattern))
+
+                    if self.prefs['exclude_files'] != []:
+                        files_exclude = []
+                        for file_pattern in self.prefs['exclude_files']:
+                            files_exclude.extend(fnmatch.filter(files_tmp, file_pattern))
+                        files_tmp = filter(lambda fname: fname not in files_exclude, files_tmp)
+
+                    cache['files'].extend(list(map(lambda fname: os.path.join(root,fname), files_tmp)))
+
+        # Combine and sort the subcaches
+        out = []
+        max_level = 0
+        for group in self.prefs['group_order']:
+            if self.prefs['group_order'][group] > max_level:
+                max_level = self.prefs['group_order'][group] + 1
+
+        for level in range(max_level):
+            tmp = []
+            for group in [name for name in self.prefs['group_order'] if self.prefs['group_order'][name] == level]:
+                tmp.extend(cache[group])
+            if tmp != []:
+                if self.prefs['group_sort_method'][level][:3].lower() == 'len':
+                    tmp.sort(key=len)
                 else:
-                    include_items.append(item)
-        else:
-            include_items = []
+                    tmp.sort()
+                out += tmp
 
-        if self.debug:
-            print('Done!')
-            print('Stored items:')
-            print('First 5 items: ')
-            print(include_items[:5])
-            print(str(len(include_items)) + ' items loaded in total')
-            print('')
-            print('Ordering and combining results...')
-
-        plugins = self.plugins_available()
-        other = self.sort_shortest(include_items + binaries + foldernames + filenames)
-
-        if 'exclude_items' in self.prefs:
-            for item in self.prefs['exclude_items']:
-                try:
-                    other.remove(item)
-                except ValueError:
-                    pass
-
-        self.cache_save(other, file_cacheScanned)
-
-        out = plugins
-        out += other
-
-        if self.debug:
-            print('Done!')
-            print('Cache building has finished.')
-            print('')
-
+        self.cache_save(out, file_cacheScanned)
         return out
+
+    # def cache_build(self):
+    #     self.load_preferences()
+
+    #     valid_extensions = []
+    #     if 'valid_extensions' in self.prefs:
+    #         for extension in self.prefs['valid_extensions']:
+    #             if extension == '*':
+    #                 valid_extensions = True
+    #                 break
+    #             elif extension == '':
+    #                 valid_extensions.append('')
+    #             elif extension[0] != '.':
+    #                 extension = '.' + extension
+    #             valid_extensions.append(extension.lower())
+
+    #     if self.debug:
+    #         print('Valid extensions:')
+    #         print('First 5 items: ')
+    #         print(valid_extensions[:5])
+    #         print(str(len(valid_extensions)) + ' loaded in total')
+    #         print('')
+    #         print('Scanning user binaries...')
+    #     filter_binaries = True
+    #     try:
+    #         if self.prefs['filter_binaries'] == False:
+    #             filter_binaries = False
+    #     except:
+    #         pass
+
+    #     binaries = self.scan_binaries(filter_binaries)
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Valid binaries:')
+    #         print('First 5 items: ')
+    #         print(binaries[:5])
+    #         print(str(len(binaries)) + ' loaded in total')
+    #         print('')
+    #         print('Loading the list of indexed folders...')
+
+    #     watch_folders = []
+    #     if 'watch_folders' in self.prefs:
+    #         watch_folders = self.prefs['watch_folders']
+    #     watch_folders = map(lambda x: x.replace('~', os.path.expanduser('~')), watch_folders)
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Watch folders:')
+    #         print('First 5 items: ')
+    #         print(watch_folders[:5])
+    #         print(str(len(watch_folders)) + ' loaded in total')
+    #         print('')
+    #         print('Loading the list of folders to be excluded from the index...')
+
+    #     ignore_folders = []
+
+    #     if 'ignore_folders' in self.prefs:
+    #         for exclude_folder in self.prefs['ignore_folders']:
+    #             ignore_folders.append(exclude_folder.replace('~', os.path.expanduser('~')))
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Excluded folders:')
+    #         print('First 5 items: ')
+    #         print(ignore_folders[:5])
+    #         print(str(len(ignore_folders)) + ' ignore_folders loaded in total')
+    #         print('')
+
+    #     filenames = []
+    #     foldernames = []
+
+    #     follow_symlinks = False
+    #     try:
+    #         if 'follow_symlinks' in self.prefs:
+    #             follow_symlinks = self.prefs['follow_symlinks']
+    #     except:
+    #         pass
+
+    #     if self.debug:
+    #         if follow_symlinks:
+    #             print('Indexing will not follow linked folders')
+    #         else:
+    #             print('Indexing will follow linked folders')
+
+    #         print('Scanning files and folders, this may take a while...')
+
+    #     for watchdir in watch_folders:
+    #         for root, dirs , files in os.walk(watchdir, followlinks=follow_symlinks):
+    #             dirs[:] = [d for d in dirs if os.path.join(root,d) not in ignore_folders]
+
+    #             if self.prefs['scan_hidden_folders'] or root.find('/.')  == -1:
+    #                 for name in files:
+    #                     if self.prefs['include_hidden_files'] or name.startswith('.') == False:
+    #                         if valid_extensions == True or os.path.splitext(name)[1].lower() in valid_extensions:
+    #                             filenames.append(os.path.join(root,name))
+    #                 for name in dirs:
+    #                     if self.prefs['include_hidden_folders'] or name.startswith('.') == False:
+    #                         foldernames.append(os.path.join(root,name))
+
+    #     foldernames = list(filter(lambda x: x not in ignore_folders, foldernames))
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Folders found:')
+    #         print('First 5 items: ')
+    #         print(foldernames[:5])
+    #         print(str(len(foldernames)) + ' found in total')
+    #         print('')
+    #         print('Files found:')
+    #         print('First 5 items: ')
+    #         print(filenames[:5])
+    #         print(str(len(filenames)) + ' found in total')
+    #         print('')
+    #         print('Loading manually added items from preferences file...')
+
+    #     if 'include_items' in self.prefs:
+    #         include_items = []
+    #         for item in self.prefs['include_items']:
+    #             if type(item) == list:
+    #                 if len(item) > 1:
+    #                     include_items.append(self.prefs['indicator_alias'] + ' ' + item[0])
+    #                 else:
+    #                     if self.debug:
+    #                         print("There are aliased items in the configuration with no command.")
+    #             else:
+    #                 include_items.append(item)
+    #     else:
+    #         include_items = []
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Stored items:')
+    #         print('First 5 items: ')
+    #         print(include_items[:5])
+    #         print(str(len(include_items)) + ' items loaded in total')
+    #         print('')
+    #         print('Ordering and combining results...')
+
+    #     plugins = self.plugins_available()
+    #     other = self.sort_shortest(include_items + binaries + foldernames + filenames)
+
+    #     if 'exclude_items' in self.prefs:
+    #         for item in self.prefs['exclude_items']:
+    #             try:
+    #                 other.remove(item)
+    #             except ValueError:
+    #                 pass
+
+    #     self.cache_save(other, file_cacheScanned)
+
+    #     out = plugins
+    #     out += other
+
+    #     if self.debug:
+    #         print('Done!')
+    #         print('Cache building has finished.')
+    #         print('')
+
+    #     return out
 
 
 class extension(dmenu):
