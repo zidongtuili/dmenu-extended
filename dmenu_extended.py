@@ -52,7 +52,7 @@ default_prefs = {
     "pluginItems_indicator_nested": "-> ",
     "pluginItems_indicator_flat": ": ",
     "pluginItems_display": 'flat',
-    # "indicator_alias": "#",
+    "indicator_alias": "#",
     # "valid_extensions": [
     #     "py",                           # Python script
     #     "svg",                          # Vector graphics
@@ -597,10 +597,14 @@ class dmenu(object):
                     command = False
                     is_Terminal = False
                     keeper = 0
-                    # Works Debian
-                    try:
-                        line = f.readline().decode('utf-8')
-                    except UnicodeDecodeError:
+
+                    # Works Arch
+                    if sys.version_info < (3,0):
+                        try:
+                            line = f.readline().decode('utf-8')
+                        except UnicodeDecodeError:
+                            line = f.readline()
+                    else:
                         line = f.readline()
 
                     while line:
@@ -618,11 +622,13 @@ class dmenu(object):
                                 keeper += 4
                         if keeper == 7:
                             break
-                        # Works Debian
-                        try:
-                            # Works Debian
-                            line = f.readline().decode('utf-8')
-                        except UnicodeDecodeError:
+                        # Works Arch
+                        if sys.version_info < (3,0):
+                            try:
+                                line = f.readline().decode('utf-8')
+                            except UnicodeDecodeError:
+                                line = f.readline()
+                        else:
                             line = f.readline()
 
 
