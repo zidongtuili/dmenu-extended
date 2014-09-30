@@ -52,6 +52,7 @@ default_prefs = {
     "pluginItems_indicator_nested": "-> ",
     "pluginItems_indicator_flat": ": ",
     "pluginItems_display": 'flat',
+    # "indicator_alias": "#",
     # "valid_extensions": [
     #     "py",                           # Python script
     #     "svg",                          # Vector graphics
@@ -596,7 +597,12 @@ class dmenu(object):
                     command = False
                     is_Terminal = False
                     keeper = 0
-                    line = f.readline()
+                    # Works Debian
+                    try:
+                        line = f.readline().decode('utf-8')
+                    except UnicodeDecodeError:
+                        line = f.readline()
+
                     while line:
                         parts = line.strip().split('=')
                         if len(parts) > 1:
@@ -612,7 +618,13 @@ class dmenu(object):
                                 keeper += 4
                         if keeper == 7:
                             break
-                        line = f.readline()
+                        # Works Debian
+                        try:
+                            # Works Debian
+                            line = f.readline().decode('utf-8')
+                        except UnicodeDecodeError:
+                            line = f.readline()
+
 
                 if title is not False and command is not False and command is not "":
                     command.replace('%U', '')
