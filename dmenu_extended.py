@@ -518,7 +518,11 @@ class dmenu(object):
             if cachefile[:19] == 'dmenuExtended_group':
                 out += self.cache_open(path_cache + '/' + cachefile)
         if out == "":
-            self.cache_regenerate()
+            if exitOnFail:
+                return out
+            else:
+                self.cache_regenerate()
+                return self.cache_load(True)
         return out
 
 
@@ -660,7 +664,7 @@ class dmenu(object):
             for application_name in applications:
                 if applications[application_name]['binary'] in cache['binaries']:
                     cache['binaries'].remove(applications[application_name]['binary'])
-        
+
         # Scan files and folders
         for folder in self.prefs['include_folders']:
             if folder not in cache['folders']:
