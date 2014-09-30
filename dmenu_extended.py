@@ -598,7 +598,7 @@ class dmenu(object):
                     is_Terminal = False
                     keeper = 0
 
-                    # Works Arch
+                    # Works Arch and Debian
                     if sys.version_info < (3,0):
                         try:
                             line = f.readline().decode('utf-8')
@@ -622,7 +622,7 @@ class dmenu(object):
                                 keeper += 4
                         if keeper == 7:
                             break
-                        # Works Arch
+                        # Works Arch and Debian
                         if sys.version_info < (3,0):
                             try:
                                 line = f.readline().decode('utf-8')
