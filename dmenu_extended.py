@@ -664,7 +664,6 @@ class dmenu(object):
             for plugin in self.get_plugins():
                 cache['plugins'].append(self.prefs['plugin_indicator_nested'] + plugin['plugin'].title)
 
-        print(cache['plugins'])
 
         # Only scn for binaries if its group_order is not None
         if self.prefs['group_order']['binaries'] > 0:
@@ -687,7 +686,7 @@ class dmenu(object):
             for folder in self.prefs['folder_include_patterns']:
                 if folder not in cache['folders']:
                     for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
-                        
+
                         if self.prefs['group_order']['folders'] > 0:
                             dirs_tmp = []
                             # Take care of hidden folders
@@ -740,6 +739,12 @@ class dmenu(object):
         for cachefile in cachefiles:
             if cachefile[:19] == 'dmenuExtended_group':
                 os.remove(path_cache + '/' + cachefile)
+
+        if self.prefs['group_order']['applications'] > 0:
+            if os.path.isfile(path_cache + '/dmenuExtended_applications.txt'):
+                os.remove(path_cache + '/dmenuExtended_applications.txt')
+            self.cache_save(cache['applications'], path_cache + '/dmenuExtended_applications.txt')
+
 
         # Combine, sort and save sub-cache groups
         for level in range(max_level+1):
@@ -1037,6 +1042,20 @@ def plugins_hook(command, menu):
         return False
     return True
 
+def applications_hook(command, menu):
+    if os.path.isfile(path_cache + '/dmenuExtended_applications.txt'):
+        out = menu.cache_open(path_cache + '/dmenuExtended_applications.txt')
+        if command in out:
+            applications = menu.scan_applications()
+            if command in applications:
+                out = applications[command]['command']
+                out = out.replace('%U','').replace('%F','').replace('%f','').replace('%u','')
+                handle_command(menu, out)
+            else:
+                print("Error finding application")
+            return True
+    return False
+
 
 def run(debug=False):
     d = dmenu()
@@ -1049,8 +1068,9 @@ def run(debug=False):
     if len(out) > 0:
         # Check for plugin call
         if plugins_hook(out, d):
-            pass
-            # plugin_hook.run(out[len(pluginTitle):])
+            sys.exit()
+        elif applications_hook(out, d):
+            sys.exit()
         else:
             # Check for command alias
             alias = d.prefs['indicator_alias']
@@ -1071,7 +1091,6 @@ def run(debug=False):
                     if out.find(d.prefs['indicator_alias']) != -1 and action == '+':
                         aliased = True
                         tmp = out.split(d.prefs['indicator_alias'])
-                        # out = [tmp[1].lstrip(), tmp[0].rstrip()]
 
                         command = tmp[0].rstrip()
                         if command is not '':
