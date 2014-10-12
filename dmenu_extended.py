@@ -24,71 +24,60 @@ file_cachePlugins = path_cache + '/dmenuExtended_plugins.txt'
 file_shCmd = '/tmp/dmenuEextended_shellCommand.sh'
 
 default_prefs = {
-    "include_files": ['*'],
-    "exclude_files": [],
-    "include_folders": ['~/'],
-    "exclude_folders": [],
-    "include_hidden_files": True,
-    "include_hidden_folders": True,
+    "file_include_patterns": [
+        "*.py",                           # Python script
+        "*.svg",                          # Vector graphics
+        "*.pdf",                          # Portable document format
+        "*.txt",                          # Plain text
+        "*.png",                          # Image file
+        "*.jpg",                          # Image file
+        "*.gif",                          # Image file
+        "*.php",                          # PHP source-code
+        "*.tex",                          # LaTeX document
+        "*.odf",                          # Open document format
+        "*.ods",                          # Open document spreadsheet
+        "*.avi",                          # Video file
+        "*.mpg",                          # Video file
+        "*.mp3",                          # Music file
+        "*.lyx",                          # Lyx document
+        "*.bib",                          # LaTeX bibliograpy
+        "*.iso",                          # CD image
+        "*.ps",                           # Postscript document
+        "*.zip",                          # Compressed archive
+        "*.xcf",                          # Gimp image format
+        "*.doc",                          # Microsoft document format
+        "*.docx"                          # Microsoft document format
+        "*.xls",                          # Microsoft spreadsheet format
+        "*.xlsx",                         # Microsoft spreadsheet format
+        "*.md",                           # Markup document
+        "*.sublime-project"               # Project file for sublime
+    ],
+    "file_exclude_patterns": [],
+    "file_include_hidden": True,
+    "folder_include_patterns": ['~/'],
+    "folder_exclude_patterns": [],
+    "folder_include_hidden": True,
     "follow_symlinks": False,
     "group_order": {
         "plugins": 0,
         "applications": 1,
         "binaries": 2,
-        "files": 4,
+        "files": 3,
         "folders": 3,
-        "aliases": 5
+        "aliases": 3
     },
     "group_sort_method": {
         0: 'length',
         1: 'length',
         2: 'length',
         3: 'length',
-        4: 'alpha',
-        5: 'length'
     },
     "alias_files": [], # TODO
     "exclude_application_binaries": True,
-    "pluginItems_indicator_nested": "-> ",
-    "pluginItems_indicator_flat": ": ",
-    "pluginItems_display": 'flat',
+    "plugin_indicator_nested": "-> ",
+    "plugin_indicator_flat": ": ",
+    "plugin_display": 'nested',
     "indicator_alias": "#",
-    # "valid_extensions": [
-    #     "py",                           # Python script
-    #     "svg",                          # Vector graphics
-    #     "pdf",                          # Portable document format
-    #     "txt",                          # Plain text
-    #     "png",                          # Image file
-    #     "jpg",                          # Image file
-    #     "gif",                          # Image file
-    #     "php",                          # PHP source-code
-    #     "tex",                          # LaTeX document
-    #     "odf",                          # Open document format
-    #     "ods",                          # Open document spreadsheet
-    #     "avi",                          # Video file
-    #     "mpg",                          # Video file
-    #     "mp3",                          # Music file
-    #     "lyx",                          # Lyx document
-    #     "bib",                          # LaTeX bibliograpy
-    #     "iso",                          # CD image
-    #     "ps",                           # Postscript document
-    #     "zip",                          # Compressed archive
-    #     "xcf",                          # Gimp image format
-    #     "doc",                          # Microsoft document format
-    #     "docx"                          # Microsoft document format
-    #     "xls",                          # Microsoft spreadsheet format
-    #     "xlsx",                         # Microsoft spreadsheet format
-    #     "md",                           # Markup document
-    #     "sublime-project"               # Project file for sublime
-    # ],
-    # "watch_folders": ["~/"],            # Base folders through which to search
-    # "follow_symlinks": False,           # Follow links to other locations
-    # "ignore_folders": [],               # Folders to exclude from the search
-    # "scan_hidden_folders": False,       # Enter hidden folders while scanning for items
-    # "include_hidden_files": False,      # Include hidden files in the cache
-    # "include_hidden_folders": False,    # Include hidden folders in the cache
-    # "include_items": [],                # Extra items to display - manually added
-    # "exclude_items": [],                # Items to hide - manually hidden
     "filter_binaries": True,            # Only include binaries that have a .desktop file
     "menu": 'dmenu',                    # Executable for the menu
     "menu_arguments": [
@@ -264,10 +253,11 @@ class dmenu(object):
                     if self.debug:
                         print("Error parsing prefs from json file " + path)
                     self.prefs = default_prefs
-                    option = self.prefs['indicator_edit'] +" Edit file manually"
+                    option = "Edit file manually"
                     response = self.menu("There is an error opening " + path + "\n" + option)
                     if response == option:
                         self.open_file(path)
+                        sys.exit()
         else:
             if self.debug:
                 print('Error opening json file ' + path)
@@ -289,16 +279,18 @@ class dmenu(object):
             if self.prefs == False:
                 self.open_file(file_prefs)
                 sys.exit()
+            elif self.prefs is None:
+                self.prefs = default_prefs
             else:
                 for key, value in default_prefs.items():
                     if key not in self.prefs:
                         self.prefs[key] = value
 
                 # Convert ~ to absolute path
-                if 'include_folders' in self.prefs:
-                    self.prefs['include_folders'] = list(map(os.path.expanduser, self.prefs['include_folders']))
-                if 'exclude_folders' in self.prefs:
-                    self.prefs['exclude_folders'] = list(map(os.path.expanduser, self.prefs['exclude_folders']))
+                if 'folder_include_patterns' in self.prefs:
+                    self.prefs['folder_include_patterns'] = list(map(os.path.expanduser, self.prefs['folder_include_patterns']))
+                if 'folder_exclude_patterns' in self.prefs:
+                    self.prefs['folder_exclude_patterns'] = list(map(os.path.expanduser, self.prefs['folder_exclude_patterns']))
 
 
     def save_preferences(self):
@@ -658,14 +650,14 @@ class dmenu(object):
             'aliases': []
         }
 
-        if self.prefs['pluginItems_display'] == 'flat':
-            delimiter = self.prefs['pluginItems_indicator_flat']
+        if self.prefs['plugin_display'] == 'flat':
+            delimiter = self.prefs['plugin_indicator_flat']
             for plugin in self.get_plugins():
                 for item in plugin['plugin'].menu_items():
                     cache['plugins'].append(plugin['plugin'].title + delimiter + item)
         else:
             for plugin in self.get_plugins():
-                cache['plugins'].append(self.prefs['pluginItems_indicator_nested'] + plugin['plugin'].title)
+                cache['plugins'].append(self.prefs['plugin_indicator_nested'] + plugin['plugin'].title)
 
         # Only scn for binaries if its group_order is not None
         if self.prefs['group_order']['binaries'] is not None:
@@ -684,20 +676,21 @@ class dmenu(object):
                     cache['binaries'].remove(applications[application_name]['binary'])
 
         # Scan files and folders
-        for folder in self.prefs['include_folders']:
+        for folder in self.prefs['folder_include_patterns']:
             if folder not in cache['folders']:
                 for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
                     dirs_tmp = []
                     # Take care of hidden folders
-                    if not self.prefs['include_hidden_folders']:
+                    if not self.prefs['folder_include_hidden']:
                         dirs_tmp = list(filter(lambda x: not x.startswith('/.'), dirs[:]))
                     else:
                         dirs_tmp = dirs[:]
 
                     # Remove any folder exclusions
-                    if self.prefs['exclude_folders'] != []:
+                    if self.prefs['folder_exclude_patterns'] != []:
                         dirs_exclude = []
-                        for folder_pattern in self.prefs['exclude_folders']:
+                        for folder_pattern in self.prefs['folder_exclude_patterns']:
+                            print('folder_pattern = ' + str(folder_pattern))
                             dirs_exclude.extend(fnmatch.filter(dirs_tmp, folder_pattern))
                         dirs_tmp = filter(lambda dirname: dirname not in dirs_exclude, dirs_tmp)
                     dirs[:] = dirs_tmp
@@ -705,19 +698,19 @@ class dmenu(object):
                     cache['folders'].extend(list(map(lambda dirname: os.path.join(root,dirname) + '/', dirs)))
 
                     # Filter out the hidden files
-                    if not self.prefs['include_hidden_files']:
+                    if not self.prefs['file_include_hidden']:
                         files = list(filter(lambda x: not x.startswith('.'), files))
 
                     files_tmp = []
-                    if '*' in self.prefs['include_files']:
+                    if '*' in self.prefs['file_include_patterns']:
                         files_tmp = files
                     else:
-                        for file_pattern in self.prefs['include_files']:
+                        for file_pattern in self.prefs['file_include_patterns']:
                             files_tmp.extend(fnmatch.filter(files, file_pattern))
 
-                    if self.prefs['exclude_files'] != []:
+                    if self.prefs['file_exclude_patterns'] != []:
                         files_exclude = []
-                        for file_pattern in self.prefs['exclude_files']:
+                        for file_pattern in self.prefs['file_exclude_patterns']:
                             files_exclude.extend(fnmatch.filter(files_tmp, file_pattern))
                         files_tmp = filter(lambda fname: fname not in files_exclude, files_tmp)
 
@@ -729,6 +722,7 @@ class dmenu(object):
         for group in self.prefs['group_order']:
             if self.prefs['group_order'][group] > max_level:
                 max_level = self.prefs['group_order'][group]
+        print(max_level)
 
         # Clear previous cache groups in cache directory
         cachefiles = os.listdir(path_cache)
@@ -738,7 +732,8 @@ class dmenu(object):
                 os.remove(path_cache + '/' + cachefile)
 
         # Combine, sort and save sub-cache groups
-        for level in range(max_level):
+        for level in range(max_level+1):
+            print(level)
             tmp = []
             for group in [name for name in self.prefs['group_order'] if self.prefs['group_order'][name] == level]:
                 tmp.extend(cache[group])
@@ -951,10 +946,10 @@ class extension(dmenu):
     def menu_items(self):
         return {
             'Rebuild Cache': self.rebuild_cache,
-            'Install Plugin': self.download_plugins,
             'Remove Plugin': self.remove_plugin,
-            'Edit Preferences': self.edit_preferences,
-            'Update Plugins': self.update_plugins
+            'Install Plugin': self.download_plugins,
+            'Update Plugins': self.update_plugins,
+            'Edit Preferences': self.edit_preferences
         }
 
 
@@ -996,8 +991,8 @@ def handle_command(d, out):
 
 
 def plugins_hook(command, menu):
-    if command[:len(menu.prefs['pluginItems_indicator_nested'])] == menu.prefs['pluginItems_indicator_nested']:
-        cmpts = command.split(menu.prefs['pluginItems_indicator_nested'])
+    if command[:len(menu.prefs['plugin_indicator_nested'])] == menu.prefs['plugin_indicator_nested']:
+        cmpts = command.split(menu.prefs['plugin_indicator_nested'])
         plugin_title = cmpts[1]
 
         plugins = load_plugins(menu.debug)
@@ -1012,8 +1007,8 @@ def plugins_hook(command, menu):
                 option = menu.menu(commands, verb)
                 if option in commands:
                     menu_items[option]()
-    elif command.find(menu.prefs['pluginItems_indicator_flat']) is not -1:
-        cmpts = command.split(menu.prefs['pluginItems_indicator_flat'])
+    elif command.find(menu.prefs['plugin_indicator_flat']) is not -1:
+        cmpts = command.split(menu.prefs['plugin_indicator_flat'])
         if len(cmpts) == 2:
             plugin_title = cmpts[0]
             plugin_command = cmpts[1]
