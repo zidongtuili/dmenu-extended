@@ -50,7 +50,7 @@ default_prefs = {
         "*.xls",                          # Microsoft spreadsheet format
         "*.xlsx",                         # Microsoft spreadsheet format
         "*.md",                           # Markup document
-        "*.sublime-project"               # Project file for sublime
+        "*.sublime-project"               # Project file for sublime text
     ],
     "file_exclude_patterns": [],
     "file_include_hidden": True,
@@ -253,10 +253,15 @@ class dmenu(object):
                     if self.debug:
                         print("Error parsing prefs from json file " + path)
                     self.prefs = default_prefs
-                    option = "Edit file manually"
-                    response = self.menu("There is an error opening " + path + "\n" + option)
-                    if response == option:
+                    option1 = "Continue with default settings"
+                    option2 = "Edit file manually"
+                    response = self.menu("There was an error parsing " + path + "\n" + option1 + "\n" + option2)
+                    if response == option1:
+                        pass
+                    elif response == option2:
                         self.open_file(path)
+                        sys.exit()
+                    else:
                         sys.exit()
         else:
             if self.debug:
@@ -659,12 +664,14 @@ class dmenu(object):
             for plugin in self.get_plugins():
                 cache['plugins'].append(self.prefs['plugin_indicator_nested'] + plugin['plugin'].title)
 
+        print(cache['plugins'])
+
         # Only scn for binaries if its group_order is not None
-        if self.prefs['group_order']['binaries'] is not None:
+        if self.prefs['group_order']['binaries'] > 0:
             cache['binaries'] = self.scan_binaries(self.prefs['filter_binaries'])
 
         # Only scan for applications if its group_order is not None
-        if self.prefs['group_order']['applications'] is not None:
+        if self.prefs['group_order']['applications'] > 0:
             applications = self.scan_applications()
             for application_name in applications:
                 cache['applications'].append(application_name)
@@ -676,53 +683,56 @@ class dmenu(object):
                     cache['binaries'].remove(applications[application_name]['binary'])
 
         # Scan files and folders
-        for folder in self.prefs['folder_include_patterns']:
-            if folder not in cache['folders']:
-                for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
-                    dirs_tmp = []
-                    # Take care of hidden folders
-                    if not self.prefs['folder_include_hidden']:
-                        dirs_tmp = list(filter(lambda x: not x.startswith('/.'), dirs[:]))
-                    else:
-                        dirs_tmp = dirs[:]
+        if self.prefs['group_order']['files'] > 0 or self.prefs['group_order']['folders'] > 0:
+            for folder in self.prefs['folder_include_patterns']:
+                if folder not in cache['folders']:
+                    for root, dirs, files in os.walk(folder, followlinks=self.prefs['follow_symlinks']):
+                        
+                        if self.prefs['group_order']['folders'] > 0:
+                            dirs_tmp = []
+                            # Take care of hidden folders
+                            if not self.prefs['folder_include_hidden']:
+                                dirs_tmp = list(filter(lambda x: not x.startswith('/.'), dirs[:]))
+                            else:
+                                dirs_tmp = dirs[:]
 
-                    # Remove any folder exclusions
-                    if self.prefs['folder_exclude_patterns'] != []:
-                        dirs_exclude = []
-                        for folder_pattern in self.prefs['folder_exclude_patterns']:
-                            print('folder_pattern = ' + str(folder_pattern))
-                            dirs_exclude.extend(fnmatch.filter(dirs_tmp, folder_pattern))
-                        dirs_tmp = filter(lambda dirname: dirname not in dirs_exclude, dirs_tmp)
-                    dirs[:] = dirs_tmp
+                            # Remove any folder exclusions
+                            if self.prefs['folder_exclude_patterns'] != []:
+                                dirs_exclude = []
+                                for folder_pattern in self.prefs['folder_exclude_patterns']:
+                                    print('folder_pattern = ' + str(folder_pattern))
+                                    dirs_exclude.extend(fnmatch.filter(dirs_tmp, folder_pattern))
+                                dirs_tmp = filter(lambda dirname: dirname not in dirs_exclude, dirs_tmp)
+                            dirs[:] = dirs_tmp
 
-                    cache['folders'].extend(list(map(lambda dirname: os.path.join(root,dirname) + '/', dirs)))
+                            cache['folders'].extend(list(map(lambda dirname: os.path.join(root,dirname) + '/', dirs)))
 
-                    # Filter out the hidden files
-                    if not self.prefs['file_include_hidden']:
-                        files = list(filter(lambda x: not x.startswith('.'), files))
+                        if self.prefs['group_order']['files'] > 0:
+                            # Filter out the hidden files
+                            if not self.prefs['file_include_hidden']:
+                                files = list(filter(lambda x: not x.startswith('.'), files))
 
-                    files_tmp = []
-                    if '*' in self.prefs['file_include_patterns']:
-                        files_tmp = files
-                    else:
-                        for file_pattern in self.prefs['file_include_patterns']:
-                            files_tmp.extend(fnmatch.filter(files, file_pattern))
+                            files_tmp = []
+                            if '*' in self.prefs['file_include_patterns']:
+                                files_tmp = files
+                            else:
+                                for file_pattern in self.prefs['file_include_patterns']:
+                                    files_tmp.extend(fnmatch.filter(files, file_pattern))
 
-                    if self.prefs['file_exclude_patterns'] != []:
-                        files_exclude = []
-                        for file_pattern in self.prefs['file_exclude_patterns']:
-                            files_exclude.extend(fnmatch.filter(files_tmp, file_pattern))
-                        files_tmp = filter(lambda fname: fname not in files_exclude, files_tmp)
+                            if self.prefs['file_exclude_patterns'] != []:
+                                files_exclude = []
+                                for file_pattern in self.prefs['file_exclude_patterns']:
+                                    files_exclude.extend(fnmatch.filter(files_tmp, file_pattern))
+                                files_tmp = filter(lambda fname: fname not in files_exclude, files_tmp)
 
-                    cache['files'].extend(list(map(lambda fname: os.path.join(root,fname), files_tmp)))
+                            cache['files'].extend(list(map(lambda fname: os.path.join(root,fname), files_tmp)))
 
         # Combine and sort the subcaches
         out = []
         max_level = 0
         for group in self.prefs['group_order']:
-            if self.prefs['group_order'][group] > max_level:
+            if self.prefs['group_order'][group] > 0 and self.prefs['group_order'][group] > max_level:
                 max_level = self.prefs['group_order'][group]
-        print(max_level)
 
         # Clear previous cache groups in cache directory
         cachefiles = os.listdir(path_cache)
@@ -733,17 +743,20 @@ class dmenu(object):
 
         # Combine, sort and save sub-cache groups
         for level in range(max_level+1):
-            print(level)
-            tmp = []
-            for group in [name for name in self.prefs['group_order'] if self.prefs['group_order'][name] == level]:
-                tmp.extend(cache[group])
-            if tmp != []:
-                if self.prefs['group_sort_method'][str(level)][:3].lower() == 'len':
-                    tmp.sort(key=len)
-                else:
-                    tmp.sort()
-                self.cache_save(tmp, path_cache + '/dmenuExtended_group' + str(level) + '.txt')
-                out += tmp
+            if level == 0:
+                continue
+                # Skip items with a level of 0
+            else:
+                tmp = []
+                for group in [name for name in self.prefs['group_order'] if self.prefs['group_order'][name] == level]:
+                    tmp.extend(cache[group])
+                if tmp != []:
+                    if self.prefs['group_sort_method'][str(level)][:3].lower() == 'len':
+                        tmp.sort(key=len)
+                    else:
+                        tmp.sort()
+                    self.cache_save(tmp, path_cache + '/dmenuExtended_group' + str(level) + '.txt')
+                    out += tmp
 
         return out
 
