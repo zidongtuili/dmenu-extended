@@ -59,12 +59,12 @@ default_prefs = {
     "folder_include_hidden": True,
     "follow_symlinks": False,
     "group_order": {
-        "plugins": 0,
-        "applications": 1,
+        "plugins": 1,
         "binaries": 2,
-        "files": 3,
-        "folders": 3,
-        "aliases": 3
+        "files": 2,
+        "folders": 2,
+        "aliases": 2,
+        "applications": 0
     },
     "group_sort_method": {
         0: 'length',
